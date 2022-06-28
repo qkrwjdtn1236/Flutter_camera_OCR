@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_tesseract_ocr/android_ios.dart';
 
 Future<void> main() async {
   // Ensure that plugin services are initialized so that `availableCameras()`
@@ -73,48 +74,56 @@ class TakePictureScreenState extends State<TakePictureScreen> {
       // You must wait until the controller is initialized before displaying the
       // camera preview. Use a FutureBuilder to display a loading spinner until the
       // controller has finished initializing.
-      body: FutureBuilder<void>(
-        future: _initializeControllerFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            // If the Future is complete, display the preview.
-            return CameraPreview(_controller);
-          } else {
-            // Otherwise, display a loading indicator.
-            return const Center(child: CircularProgressIndicator());
-          }
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        // Provide an onPressed callback.
-        onPressed: () async {
-          // Take the Picture in a try / catch block. If anything goes wrong,
-          // catch the error.
-          try {
-            // Ensure that the camera is initialized.
-            await _initializeControllerFuture;
+      body: Column(
+        children: [
+          FutureBuilder<void>(
+            future: _initializeControllerFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.done) {
+                // If the Future is complete, display the preview.
+                return CameraPreview(_controller);
+              } else {
+                // Otherwise, display a loading indicator.
+                return const Center(child: CircularProgressIndicator());
+              }
+            },
+          ),
+          FloatingActionButton(
+            // Provide an onPressed callback.
+            onPressed: () async {
+              // Take the Picture in a try / catch block. If anything goes wrong,
+              // catch the error.
+              try {
+                // Ensure that the camera is initialized.
+                await _initializeControllerFuture;
 
-            // Attempt to take a picture and get the file `image`
-            // where it was saved.
-            final image = await _controller.takePicture();
+                // Attempt to take a picture and get the file `image`
+                // where it was saved.
+                final image = await _controller.takePicture();
+                final result = await FlutterTesseractOcr.extractText(image.path, language: 'kor+eng');
+                // If the picture was taken, display it on a new screen.
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => DisplayPictureScreen(
+                      // Pass the automatically generated path to
+                      // the DisplayPictureScreen widget.
+                      imagePath: image.path,
+                      imgToText:result,
+                    ),
+                  ),
+                );
+              } catch (e) {
+                // If an error occurs, log the error to the console.
+                print(e);
+              }
+            },
+            child: const Icon(Icons.camera_alt),
+          ),
 
-            // If the picture was taken, display it on a new screen.
-            await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => DisplayPictureScreen(
-                  // Pass the automatically generated path to
-                  // the DisplayPictureScreen widget.
-                  imagePath: image.path,
-                ),
-              ),
-            );
-          } catch (e) {
-            // If an error occurs, log the error to the console.
-            print(e);
-          }
-        },
-        child: const Icon(Icons.camera_alt),
+        ],
       ),
+
+
     );
   }
 }
@@ -122,8 +131,9 @@ class TakePictureScreenState extends State<TakePictureScreen> {
 // A widget that displays the picture taken by the user.
 class DisplayPictureScreen extends StatelessWidget {
   final String imagePath;
+  final String imgToText;
 
-  const DisplayPictureScreen({key, required this.imagePath});
+  const DisplayPictureScreen({key, required this.imagePath, required this.imgToText});
 
   @override
   Widget build(BuildContext context) {
@@ -131,7 +141,12 @@ class DisplayPictureScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('Display the Picture')),
       // The image is stored as a file on the device. Use the `Image.file`
       // constructor with the given path to display the image.
-      body: Image.file(File(imagePath)),
+      body: ListView(
+        children: [
+          Image.file(File(imagePath)),
+          Text(imgToText),
+        ],
+      ),
     );
   }
 }
